@@ -8,4 +8,5 @@ export interface FallingBox {
   x: number;
   y: number;
   value: number;
+  velocity?: number;
 }

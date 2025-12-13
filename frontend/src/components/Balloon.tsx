@@ -5,6 +5,7 @@ interface BalloonProps {
   id: number;
   value: number;
   paused: boolean;
+  speed: number; // Kecepatan balon berdasarkan level
   onDrop: (id: number, x: number, y: number, value: number) => void;
 }
 
@@ -12,6 +13,7 @@ export default function Balloon({
   id,
   value,
   paused,
+  speed,
   onDrop,
 }: BalloonProps) {
   const [x, setX] = useState(() => window.innerWidth + 200 + Math.random() * 400);
@@ -26,15 +28,19 @@ export default function Balloon({
           if (prev < -150) {
             return window.innerWidth + Math.random() * 400;
           }
-          return prev - 3.5;
+          return prev - speed;
         });
       }
       rafRef.current = requestAnimationFrame(tick);
     };
 
     rafRef.current = requestAnimationFrame(tick);
-    return () => rafRef.current && cancelAnimationFrame(rafRef.current);
-  }, [paused, visible]);
+    return () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+      }
+    };
+  }, [paused, visible, speed]);
 
   const handleClick = () => {
     if (!visible) return;

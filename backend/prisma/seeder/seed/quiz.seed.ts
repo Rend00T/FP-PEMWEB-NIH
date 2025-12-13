@@ -154,9 +154,7 @@ async function uploadImage(
 
   // Ensure directory exists
   const dir = path.dirname(picturePath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
+  fs.mkdirSync(dir, { recursive: true });
 
   fs.copyFileSync(sourcePath, picturePath);
 

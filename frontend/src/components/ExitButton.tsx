@@ -1,12 +1,9 @@
-import { postPlayCount } from "../services/api";
-
 interface ExitButtonProps {
   onExit: () => void;
 }
 
 export default function ExitButton({ onExit }: ExitButtonProps) {
-  const handleClick = async () => {
-    await postPlayCount();
+  const handleClick = () => {
     onExit();
   };
 
