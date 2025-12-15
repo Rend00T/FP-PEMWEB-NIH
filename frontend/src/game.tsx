@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import background from "./assets/background.png";
+import background from "./assets/bg.png";
 import Balloon from "./components/Balloon";
 import Train from "./components/Train";
 import Wagon from "./components/Wagon";
@@ -26,6 +26,8 @@ export default function Game({ exitGame, gameId }: GameProps) {
 
   const [trainX, setTrainX] = useState(() => window.innerWidth + 400);
   const trainPhase = useRef<"enter" | "idle" | "exit">("enter");
+  const levelCompleted = useRef(false);
+  const [levelPhase, setLevelPhase] = useState<"playing" | "completing">("playing");
 
   // Get levels from gameData, dengan fallback default
   const maxLevels = gameData?.levels ?? 5;
@@ -120,6 +122,9 @@ export default function Game({ exitGame, gameId }: GameProps) {
       setTimeLeft(60);
       trainPhase.current = "enter";
       setTrainX(window.innerWidth + 400);
+      // allow next level completion to be detected again
+      levelCompleted.current = false;
+      setLevelPhase("playing");
     };
 
     spawn();
@@ -152,7 +157,10 @@ export default function Game({ exitGame, gameId }: GameProps) {
     let raf: number;
     const step = () => {
       setTrainX((prev) => {
-        const center = window.innerWidth / 2 - 200;
+        // Adjust center position based on level to prevent wagons from crowding right edge
+        const baseCenter = window.innerWidth / 2 - 200;
+        const levelOffset = (level - 1) * 50; // Reduced shift to 50px per additional wagon to prevent off-screen
+        const center = Math.max(baseCenter - levelOffset, 50); // Ensure center doesn't go too far left
 
         if (trainPhase.current === "enter") {
           if (prev > center) return prev - 4;
@@ -171,7 +179,7 @@ export default function Game({ exitGame, gameId }: GameProps) {
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, []);
+  }, [level]); // Add level dependency to recalculate center on level change
 
   // Falling boxes movement
   useEffect(() => {
@@ -204,6 +212,8 @@ export default function Game({ exitGame, gameId }: GameProps) {
   // Gerbong 1 HANYA menerima balon dengan angka 1, Gerbong 2 HANYA menerima balon dengan angka 2, dst
   useEffect(() => {
     if (falling.length === 0) return;
+    // Prevent collision updates after level completion to avoid re-triggering
+    if (levelCompleted.current || levelPhase === "completing") return;
 
     const wagonTop = window.innerHeight - 220;
     const wagonBottom = window.innerHeight - 140;
@@ -224,30 +234,15 @@ export default function Game({ exitGame, gameId }: GameProps) {
           return;
         }
 
-        // Hitung gerbong mana yang terkena
-        const wagonStart = trainX + 220;
-        const spacing = 180;
-        const rel = box.x - wagonStart;
-        const idx = Math.floor(rel / spacing);
-
-        // Jika masuk ke gerbong yang valid (0 sampai level-1)
-        if (idx >= 0 && idx < level) {
-          // Angka target gerbong = idx + 1 (gerbong pertama = 1, kedua = 2, dst)
-          const targetNumber = idx + 1;
-          
-          // LOGIKA UTAMA: HANYA hit jika angka balon SAMA PERSIS dengan angka target gerbong
-          // Ini sesuai dengan Wordwall: balon HARUS cocok dengan angka gerbong
-          if (box.value === targetNumber) {
-            // ✅ Angka cocok! Hit dihitung
-            updatedHits[idx] = Math.max(updatedHits[idx] + 1, 1);
-            // Balon dihapus (tidak push ke remain) karena sudah masuk ke gerbong yang benar
-          } else {
-            // ❌ Angka TIDAK cocok! Balon dihapus dan TIDAK dihitung sama sekali
-            // Balon tidak push ke remain, berarti dihapus tanpa dihitung
-            // Ini memastikan hanya balon dengan angka yang benar yang dihitung
-          }
+        // Jika jatuh di area wagon vertikal, cek value
+        // Balon masuk ke wagon yang value-nya cocok, tanpa peduli posisi x
+        if (box.value <= level) {
+          // Value valid, hit wagon yang sesuai (wagon idx = value - 1)
+          const wagonIdx = box.value - 1;
+          updatedHits[wagonIdx] = Math.max(updatedHits[wagonIdx] + 1, 1);
+          // Balon dihapus karena masuk wagon
         } else {
-          // Jika tidak masuk ke gerbong yang valid, lanjutkan jatuh
+          // Value tidak valid (lebih dari level), jatuh terus
           remain.push(box);
         }
       });
@@ -262,6 +257,11 @@ export default function Game({ exitGame, gameId }: GameProps) {
     if (hitsPerWagon.length === 0) return;
     const allFilled = hitsPerWagon.every((h) => h >= 1);
     if (allFilled) {
+      // Prevent multiple triggers while waiting for transition
+      if (levelCompleted.current) return;
+      levelCompleted.current = true;
+      setLevelPhase("completing");
+
       // Check jika sudah mencapai max levels
       if (level >= maxLevels) {
         // Game selesai
@@ -273,12 +273,13 @@ export default function Game({ exitGame, gameId }: GameProps) {
         exitGame();
         return;
       }
+
       trainPhase.current = "exit";
       setTimeout(() => {
         setLevel((l) => l + 1);
       }, 2000);
     }
-  }, [hitsPerWagon, level, maxLevels, gameId, exitGame]);
+  }, [hitsPerWagon, maxLevels, gameId, exitGame, levelPhase]);
 
   const handleDrop = (
     id: number,
