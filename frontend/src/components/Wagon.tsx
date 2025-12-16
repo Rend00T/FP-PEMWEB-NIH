@@ -68,7 +68,7 @@ export default function Wagon({ baseX, count }: WagonProps) {
               src={wagonImg}
               style={{
                 position: "absolute",
-                bottom: 81,
+                bottom: 95,
                 left: x,
                 height: 120,
                 pointerEvents: "none",

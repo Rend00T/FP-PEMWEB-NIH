@@ -187,15 +187,6 @@ export function useGameLogic({
     spawn();
   }, [level, loading, restartTick]);
 
-  // === BACKGROUND MUSIC ===
-  useEffect(() => {
-    if (loading) return;
-    soundManager.playBackground();
-    return () => {
-      soundManager.stopBackground();
-    };
-  }, [loading]);
-
   // === TIMER ===
   useEffect(() => {
     if (paused) return;
@@ -230,14 +221,23 @@ export function useGameLogic({
     soundManager.playCountdown();
   }, [timeLeft, paused]);
 
+  // === BACKGROUND MUSIC & PAUSE AUDIO ===
+  useEffect(() => {
+    if (loading) return;
+    if (paused) {
+      soundManager.pauseAll();
+    } else {
+      soundManager.resumeBackground();
+    }
+  }, [paused, loading]);
+
   // === GERAK KERETA ===
   useEffect(() => {
     let raf: number;
-    const viewportWidth = getViewportWidth();
     const step = () => {
+      const viewportWidth = getViewportWidth();
       setTrainX((prev) => {
-        // Pusatkan kereta, lalu geser sedikit ke kiri tiap naik level
-        // supaya semua gerbong muat di layar.
+        if (paused) return prev;
         const baseCenter = viewportWidth / 2 - 300;
         const perLevelShift = 125; // jarak geser ke kiri per level
         const center = Math.max(baseCenter - (level - 1) * perLevelShift, -300);
@@ -249,7 +249,6 @@ export function useGameLogic({
         }
 
         if (trainPhase.current === "exit") {
-          // Gerakkan sampai seluruh rangkaian keluar layar kiri
           const exitTarget = -(level * 300 + 800);
           const exitSpeed = 10; // lebih cepat saat keluar
           if (prev > exitTarget) return prev - exitSpeed;
@@ -262,7 +261,7 @@ export function useGameLogic({
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [level]);
+  }, [level, paused]);
 
   // === GERAK KOTAK JATUH ===
   useEffect(() => {
@@ -445,6 +444,15 @@ export function useGameLogic({
     exitGame();
   };
 
+  const restartLevel = () => {
+    soundManager.stopAll();
+    setPausedState(false);
+    setGameOver(false);
+    setVictory(false);
+    setLevelPhase("playing");
+    setRestartTick((t) => t + 1);
+  };
+
   // Expose setter yang punya API sama dengan useState boolean
   const setPaused: UseGameLogicResult["setPaused"] = (updater) => {
     setPausedState((prev) => updater(prev));
@@ -465,7 +473,7 @@ export function useGameLogic({
     loading,
     handleDrop,
     handleExit,
-    restartLevel: () => setRestartTick((t) => t + 1),
+    restartLevel,
   };
 }
 

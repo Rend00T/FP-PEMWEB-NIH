@@ -16,7 +16,7 @@ export default function Rail() {
             width: "30px",
             height: "12px",
             left: i * 70,
-            bottom: -6,
+            bottom: -8,
           }}
         ></div>
       ))}

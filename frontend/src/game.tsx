@@ -211,6 +211,7 @@ export default function Game({ exitGame, gameId }: GameProps) {
           durationMs={16000 + i * 2000}
           scale={0.6 + (i % 3) * 0.2}
           y={10 + (i % 3) * 28}
+          paused={paused}
         />
       ))}
 
@@ -260,9 +261,9 @@ export default function Game({ exitGame, gameId }: GameProps) {
               fontWeight: 800,
               fontSize: 28,
               textShadow: "0 0 4px rgba(0,0,0,0.8)",
-            }}
-          >
-            {f.value}
+          }}
+        >
+          {f.value}
           </div>
         </div>
       ))}

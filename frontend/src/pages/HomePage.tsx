@@ -112,21 +112,21 @@ export default function HomePage({ startGame }: HomePageProps) {
       )}
 
       {!loadingGames && !loadingAudio && (
-        <button
-          onClick={handleStartGame}
-          style={{
-            padding: "10px 24px",
-            borderRadius: 8,
-            border: "none",
-            background: "#22c55e",
-            color: "white",
-            cursor: "pointer",
-            fontSize: 16,
-            marginTop: 8,
-          }}
-        >
-          Start Game
-        </button>
+      <button
+        onClick={handleStartGame}
+        style={{
+          padding: "10px 24px",
+          borderRadius: 8,
+          border: "none",
+          background: "#22c55e",
+          color: "white",
+          cursor: "pointer",
+          fontSize: 16,
+          marginTop: 8,
+        }}
+      >
+        Start Game
+      </button>
       )}
     </div>
   );
