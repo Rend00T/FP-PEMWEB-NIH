@@ -6,11 +6,39 @@ interface WagonProps {
 }
 
 export default function Wagon({ baseX, count }: WagonProps) {
+  const renderDots = (count: number) => {
+    const dots = Array.from({ length: count });
+    return (
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 6,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        {dots.map((_, idx) => (
+          <div
+            key={idx}
+            style={{
+              width: 10,
+              height: 10,
+              borderRadius: "50%",
+              background: "white",
+            }}
+          />
+        ))}
+      </div>
+    );
+  };
+
   return (
     <>
       {Array.from({ length: count }).map((_, i) => {
-        // posisi kiri wagon (selaras dengan kereta)
-        const x = baseX + 300 + i * 180;
+        // posisi kiri wagon, disusun agar tidak overlap antar wagon
+        const wagonSpacing = 300; // sedikit lebih kecil agar muat di layar
+        const x = baseX + 300 + i * wagonSpacing;
 
         return (
           <div key={i}>
@@ -18,22 +46,21 @@ export default function Wagon({ baseX, count }: WagonProps) {
             <div
               style={{
                 position: "absolute",
-                bottom: 80,       // TENGAH wagon
-                left: x + 65,      // pas tengah horizontal
-                width: 50,
-                height: 50,
-                background: "black",
-                borderRadius: 8,
-                fontSize: 26,
-                fontWeight: "bold",
+                bottom: 93,       // TENGAH wagon
+                left: x + 30,      // selaraskan di tengah wagon
+                width: 280,        // lebar transparan mendekati lebar wagon
+                height: 70,
+                background: "rgba(0,0,0,0)",
+                color: "white",
+                borderRadius: 10,
                 display: "flex",
                 justifyContent: "center",
                 alignItems: "center",
-                boxShadow: "0 0 6px rgba(0,0,0,0.5)",
-                zIndex: 30
+                animation: "waggle 1.3s infinite ease-in-out",
+                zIndex: 200
               }}
             >
-              {i + 1}
+              {renderDots(i + 1)}
             </div>
 
             {/* GAMBAR WAGON */}
@@ -41,12 +68,12 @@ export default function Wagon({ baseX, count }: WagonProps) {
               src={wagonImg}
               style={{
                 position: "absolute",
-                bottom: 40,
+                bottom: 81,
                 left: x,
                 height: 120,
                 pointerEvents: "none",
                 animation: "waggle 1.3s infinite ease-in-out",
-                zIndex: 20
+                zIndex: 100
               }}
             />
           </div>

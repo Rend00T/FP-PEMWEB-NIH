@@ -1,12 +1,23 @@
-import { useEffect, useRef, useState } from "react";
 import background from "./assets/bg.png";
+import boxImg from "./assets/box.png";
+import papan1 from "./assets/papanlvl1.png";
+import papan2 from "./assets/papanlvl2.png";
+import papan3 from "./assets/papanlvl3.png";
+import papan4 from "./assets/papanlvl4.png";
+import papan5 from "./assets/papanlvl5.png";
+import wagonImg from "./assets/wagon.png";
+import trainImg from "./assets/train.png";
+import balloonImg from "./assets/balloon.png";
+import explodeImg from "./assets/bahlil.png";
 import Balloon from "./components/Balloon";
-import Train from "./components/Train";
-import Wagon from "./components/Wagon";
+import TrainWithWagons from "./components/TrainWithWagons";
 import PauseButton from "./components/PauseButton";
 import ExitButton from "./components/ExitButton";
-import type { BalloonModel, FallingBox } from "./types/game";
-import { getGamePlayPublic, updatePlayCount, type GamePlayData } from "./services/api";
+import { useGameLogic } from "./gameLogic";
+import GameOverCard from "./components/GameOverCard";
+import VictoryCard from "./components/VictoryCard";
+import Cloud from "./components/Cloud";
+import { useEffect, useRef, useState } from "react";
 
 interface GameProps {
   exitGame: () => void;
@@ -14,292 +25,107 @@ interface GameProps {
 }
 
 export default function Game({ exitGame, gameId }: GameProps) {
-  const [level, setLevel] = useState(1);
-  const [paused, setPaused] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(60);
-  const [loading, setLoading] = useState(true);
-  const [gameData, setGameData] = useState<GamePlayData | null>(null);
+  const {
+    level,
+    maxLevels,
+    timeLeft,
+    gameOver,
+    victory,
+    paused,
+    setPaused,
+    balloons,
+    falling,
+    trainX,
+    balloonSpeed,
+    loading,
+    handleDrop,
+    handleExit,
+    restartLevel,
+  } = useGameLogic({ exitGame, gameId });
 
-  const [balloons, setBalloons] = useState<BalloonModel[]>([]);
-  const [falling, setFalling] = useState<FallingBox[]>([]);
-  const [hitsPerWagon, setHitsPerWagon] = useState<number[]>([]);
+  // Papan level (bergerak per level)
+  const boardTargetLeft = 0; // transform target (left offset sudah di style: left: 80)
+  const boardOffLeft = -600; // mulai jauh di kiri
+  const boardOffRight =
+    typeof window !== "undefined" ? window.innerWidth + 600 : 1600; // keluar ke kanan
+  const [boardX, setBoardX] = useState(boardOffLeft);
+  const [boardSrc, setBoardSrc] = useState(papan1);
+  const prevLevel = useRef<number | null>(null);
+  const [imagesLoaded, setImagesLoaded] = useState(false);
 
-  const [trainX, setTrainX] = useState(() => window.innerWidth + 400);
-  const trainPhase = useRef<"enter" | "idle" | "exit">("enter");
-  const levelCompleted = useRef(false);
-  const [levelPhase, setLevelPhase] = useState<"playing" | "completing">("playing");
+  const getBoardByLevel = (lvl: number) => {
+    if (lvl === 1) return papan1;
+    if (lvl === 2) return papan2;
+    if (lvl === 3) return papan3;
+    if (lvl === 4) return papan4;
+    return papan5;
+  };
 
-  // Get levels from gameData, dengan fallback default
-  const maxLevels = gameData?.levels ?? 5;
-
-  // Hitung kecepatan balon berdasarkan level
-  // Level 1: 2.0 (lambat), Level 2: 2.5, Level 3: 3.0, dst (meningkat 0.5 per level)
-  // Maksimal kecepatan: 6.0
-  const balloonSpeed = Math.min(2.0 + (level - 1) * 0.5, 6.0);
-
-  // Fetch game data dari backend saat component mount
   useEffect(() => {
-    const fetchGameData = async () => {
-      if (!gameId) {
-        // Jika tidak ada gameId, gunakan default values dan langsung mulai game
-        setLoading(false);
-        return;
-      }
+    const nextSrc = getBoardByLevel(level);
+    const hasPrev = prevLevel.current !== null;
 
-      setLoading(true);
-      const data = await getGamePlayPublic(gameId);
-      
-      if (data) {
-        setGameData(data);
-      }
-      // Jika game tidak ditemukan, tetap lanjutkan dengan default values (silent)
-      setLoading(false);
-    };
-
-    fetchGameData();
-  }, [gameId]);
-
-  // Spawn balloons setiap level
-  // Fixed: Pastikan semua angka dari 1 sampai level ada di balon
-  useEffect(() => {
-    if (loading) return; // Tunggu sampai game data loaded
-
-    const spawn = async () => {
-      // Generate balon yang lebih banyak dan pastikan semua angka yang dibutuhkan ada
-      // Minimal 3 balon per angka yang dibutuhkan, plus variasi random
-      const minBalloonsPerNumber = 3;
-      const extraRandom = 5; // Tambahan untuk variasi
-
-      // Generate values yang memastikan semua angka dari 1 sampai level ada
-      const values: number[] = [];
-      
-      // Pastikan setiap angka dari 1 sampai level ada minimal 3 kali
-      for (let num = 1; num <= level; num++) {
-        for (let i = 0; i < minBalloonsPerNumber; i++) {
-          values.push(num);
-        }
-      }
-      
-      // Tambahkan angka random untuk variasi (dari 1 sampai level)
-      for (let i = 0; i < extraRandom; i++) {
-        values.push(Math.floor(Math.random() * level) + 1);
-      }
-      
-      // Shuffle array untuk distribusi yang lebih acak
-      for (let i = values.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [values[i], values[j]] = [values[j], values[i]];
-      }
-
-      let arr: BalloonModel[] = [];
-
-      const spawnOne = (i: number) => {
-        if (i >= values.length) {
-          setBalloons(arr);
-          return;
-        }
-
-        const value = values[i];
-
-        arr.push({
-          id: i + Math.random() * 100000,
-          value,
-        });
-
-        setBalloons([...arr]);
-
-        // RANDOM DELAY AGAR TIDAK PER-KLOTER
-        const delay = 400 + Math.random() * 600;
-        setTimeout(() => spawnOne(i + 1), delay);
-      };
-
-      setBalloons([]);
-      spawnOne(0);
-
-      // reset lainnya
-      setFalling([]);
-      setHitsPerWagon(Array(level).fill(0));
-      setTimeLeft(60);
-      trainPhase.current = "enter";
-      setTrainX(window.innerWidth + 400);
-      // allow next level completion to be detected again
-      levelCompleted.current = false;
-      setLevelPhase("playing");
-    };
-
-    spawn();
-  }, [level, loading]);
-
-
-
-  // Timer
-  useEffect(() => {
-    if (paused) return;
-    if (timeLeft <= 0) return;
-
-    const id = setInterval(() => {
-      setTimeLeft((t) => (t > 0 ? t - 1 : 0));
-    }, 1000);
-
-    return () => clearInterval(id);
-  }, [paused, timeLeft]);
-
-  // Kalah jika waktu habis
-  useEffect(() => {
-    if (timeLeft === 0) {
-      alert("Waktu habis! Level diulang.");
-      setLevel((l) => l);
-    }
-  }, [timeLeft]);
-
-  // Gerak kereta
-  useEffect(() => {
-    let raf: number;
-    const step = () => {
-      setTrainX((prev) => {
-        // Adjust center position based on level to prevent wagons from crowding right edge
-        const baseCenter = window.innerWidth / 2 - 200;
-        const levelOffset = (level - 1) * 50; // Reduced shift to 50px per additional wagon to prevent off-screen
-        const center = Math.max(baseCenter - levelOffset, 50); // Ensure center doesn't go too far left
-
-        if (trainPhase.current === "enter") {
-          if (prev > center) return prev - 4;
-          trainPhase.current = "idle";
-          return center;
-        }
-
-        if (trainPhase.current === "exit") {
-          if (prev > -500) return prev - 4;
-        }
-
-        return prev;
-      });
-
-      raf = requestAnimationFrame(step);
-    };
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [level]); // Add level dependency to recalculate center on level change
-
-  // Falling boxes movement
-  useEffect(() => {
-    let raf: number;
-
-    const tick = () => {
-      if (!paused) {
-        setFalling((prev) =>
-          prev
-            .map((b) => {
-              const gravity = (b.velocity ?? 0) + 0.4; // gravitasi
-              return {
-                ...b,
-                velocity: gravity,
-                y: b.y + gravity,
-              };
-            })
-            .filter((b) => b.y < window.innerHeight - 140)
-        );
-      }
-      raf = requestAnimationFrame(tick);
-    };
-
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [paused]);
-
-  // Collision boxes → wagons
-  // Logika sesuai Wordwall: Balon HARUS memiliki angka yang SAMA PERSIS dengan angka di gerbong
-  // Gerbong 1 HANYA menerima balon dengan angka 1, Gerbong 2 HANYA menerima balon dengan angka 2, dst
-  useEffect(() => {
-    if (falling.length === 0) return;
-    // Prevent collision updates after level completion to avoid re-triggering
-    if (levelCompleted.current || levelPhase === "completing") return;
-
-    const wagonTop = window.innerHeight - 220;
-    const wagonBottom = window.innerHeight - 140;
-
-    setFalling((prev) => {
-      const remain: FallingBox[] = [];
-      const updatedHits = [...hitsPerWagon];
-
-      prev.forEach((box) => {
-        // Jika masih di atas gerbong, lanjutkan jatuh
-        if (box.y < wagonTop) {
-          remain.push(box);
-          return;
-        }
-
-        // Jika sudah melewati gerbong (di bawah), hapus
-        if (box.y > wagonBottom) {
-          return;
-        }
-
-        // Jika jatuh di area wagon vertikal, cek value
-        // Balon masuk ke wagon yang value-nya cocok, tanpa peduli posisi x
-        if (box.value <= level) {
-          // Value valid, hit wagon yang sesuai (wagon idx = value - 1)
-          const wagonIdx = box.value - 1;
-          updatedHits[wagonIdx] = Math.max(updatedHits[wagonIdx] + 1, 1);
-          // Balon dihapus karena masuk wagon
-        } else {
-          // Value tidak valid (lebih dari level), jatuh terus
-          remain.push(box);
-        }
-      });
-
-      setHitsPerWagon(updatedHits);
-      return remain;
-    });
-  }, [falling, hitsPerWagon, level, trainX]);
-
-  // Check level completion
-  useEffect(() => {
-    if (hitsPerWagon.length === 0) return;
-    const allFilled = hitsPerWagon.every((h) => h >= 1);
-    if (allFilled) {
-      // Prevent multiple triggers while waiting for transition
-      if (levelCompleted.current) return;
-      levelCompleted.current = true;
-      setLevelPhase("completing");
-
-      // Check jika sudah mencapai max levels
-      if (level >= maxLevels) {
-        // Game selesai
-        alert(`Selamat! Anda telah menyelesaikan semua ${maxLevels} level!`);
-        // Update play count saat game selesai
-        if (gameId) {
-          updatePlayCount(gameId);
-        }
-        exitGame();
-        return;
-      }
-
-      trainPhase.current = "exit";
+    if (hasPrev) {
+      // 1) Keluarkan papan lama ke kanan (smooth)
+      setBoardX(boardOffRight);
+      // 2) Setelah benar-benar keluar (durasi keluarnya 3s), ganti papan lalu masuk dari kiri
       setTimeout(() => {
-        setLevel((l) => l + 1);
-      }, 2000);
+        setBoardSrc(nextSrc);
+        setBoardX(boardOffLeft);
+        requestAnimationFrame(() => {
+          setBoardX(boardTargetLeft);
+        });
+      }, 3000);
+    } else {
+      // Level pertama: langsung masuk dari kiri
+      setBoardSrc(nextSrc);
+      setBoardX(boardOffLeft);
+      requestAnimationFrame(() => {
+        setBoardX(boardTargetLeft);
+      });
     }
-  }, [hitsPerWagon, maxLevels, gameId, exitGame, levelPhase]);
 
-  const handleDrop = (
-    id: number,
-    x: number,
-    y: number,
-    value: number
-  ) => {
-    setFalling((prev) => [...prev, { id, x, y, value }]);
-  };
+    prevLevel.current = level;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [level]);
 
-  const handleExit = () => {
-    // Update play count saat exit
-    if (gameId) {
-      updatePlayCount(gameId);
-    }
-    exitGame();
-  };
+  // Preload seluruh asset gambar penting (bg, papan, balon, kereta, wagon, box, ledakan)
+  useEffect(() => {
+    const assets = [
+      background,
+      boxImg,
+      papan1,
+      papan2,
+      papan3,
+      papan4,
+      papan5,
+      wagonImg,
+      trainImg,
+      balloonImg,
+      explodeImg,
+    ];
 
-  // Loading state
-  if (loading) {
+    let cancelled = false;
+    const loadImage = (src: string) =>
+      new Promise<void>((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve();
+        img.onerror = () => resolve(); // tetap lanjut meski gagal
+        img.src = src;
+      });
+
+    Promise.all(assets.map(loadImage)).then(() => {
+      if (!cancelled) setImagesLoaded(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const ready = !loading && imagesLoaded;
+
+  if (!ready) {
     return (
       <div
         style={{
@@ -319,9 +145,6 @@ export default function Game({ exitGame, gameId }: GameProps) {
       </div>
     );
   }
-
-  // Error state (hanya tampilkan jika ada error yang critical)
-  // Jika game tidak ditemukan, tetap lanjutkan dengan default values
 
   return (
     <div
@@ -363,6 +186,34 @@ export default function Game({ exitGame, gameId }: GameProps) {
         <ExitButton onExit={handleExit} />
       </div>
 
+      {/* BOARD LEVEL */}
+      <img
+        src={boardSrc}
+        style={{
+          position: "absolute",
+          top: 600,
+          left: 80,
+          transform: `translateX(${boardX}px)`,
+          height: 230,
+          objectFit: "contain",
+          transition: "transform 3s ease-in-out",
+          willChange: "transform",
+          zIndex: 12,
+          pointerEvents: "none",
+        }}
+      />
+
+      {/* CLOUDS */}
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <Cloud
+          key={i}
+          delayMs={i * 700}
+          durationMs={16000 + i * 2000}
+          scale={0.6 + (i % 3) * 0.2}
+          y={10 + (i % 3) * 28}
+        />
+      ))}
+
       {/* BALLOONS */}
       {balloons.map((b) => (
         <Balloon
@@ -381,28 +232,43 @@ export default function Game({ exitGame, gameId }: GameProps) {
           key={`${f.id}-${f.y}`}
           style={{
             position: "absolute",
-            width: 48,
-            height: 48,
-            background: "black",
-            border: "2px solid black",
-            borderRadius: 6,
-            left: f.x - 24,
-            top: f.y,
+            width: 64,
+            height: 64,
+            left: f.x - 32,
+            // Batasi posisi bawah agar tidak menembus gambar wagon (wagon bottom ~ 40, tinggi ~120)
+            top: Math.min(f.y, window.innerHeight - 170), // 140 = 40 (bottom wagon) + ~100 (tinggi wagon)
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
-            fontWeight: 700,
-            fontSize: 20,
             zIndex: 50,
           }}
         >
-          {f.value}
+          <img
+            src={boxImg}
+            style={{
+              position: "absolute",
+              width: "100%",
+              height: "100%",
+              objectFit: "contain",
+              pointerEvents: "none",
+            }}
+          />
+          <div
+            style={{
+              position: "relative",
+              color: "white",
+              fontWeight: 800,
+              fontSize: 28,
+              textShadow: "0 0 4px rgba(0,0,0,0.8)",
+            }}
+          >
+            {f.value}
+          </div>
         </div>
       ))}
 
       {/* TRAIN & WAGONS */}
-      <Train x={trainX} />
-      <Wagon baseX={trainX} count={level} />
+      <TrainWithWagons x={trainX} count={level} level={level} />
 
       {/* RAIL LINE (TIDAK MERUSAK APAPUN) */}
       <div
@@ -415,6 +281,17 @@ export default function Game({ exitGame, gameId }: GameProps) {
           zIndex: 10,
         }}
       ></div>
+
+      {gameOver && (
+        <GameOverCard
+          onRetry={restartLevel}
+          onExit={handleExit}
+        />
+      )}
+
+      {victory && (
+        <VictoryCard onExit={handleExit} />
+      )}
     </div>
   );
 }

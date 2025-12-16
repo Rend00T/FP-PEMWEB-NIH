@@ -1,3 +1,4 @@
+import { soundManager } from "../soundConfig";
 interface PauseButtonProps {
   paused: boolean;
   onToggle: () => void;
@@ -6,7 +7,10 @@ interface PauseButtonProps {
 export default function PauseButton({ paused, onToggle }: PauseButtonProps) {
   return (
     <button
-      onClick={onToggle}
+      onClick={() => {
+        soundManager.playClick();
+        onToggle();
+      }}
       style={{
         padding: "6px 12px",
         marginLeft: 8,

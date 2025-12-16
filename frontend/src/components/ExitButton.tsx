@@ -1,9 +1,11 @@
+import { soundManager } from "../soundConfig";
 interface ExitButtonProps {
   onExit: () => void;
 }
 
 export default function ExitButton({ onExit }: ExitButtonProps) {
   const handleClick = () => {
+    soundManager.playClick();
     onExit();
   };
 

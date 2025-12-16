@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { getAllPublicGames } from "../services/api";
+import { soundManager } from "../soundConfig";
 
 interface HomePageProps {
   startGame: (gameId?: string) => void;
@@ -7,7 +8,8 @@ interface HomePageProps {
 
 export default function HomePage({ startGame }: HomePageProps) {
   const [games, setGames] = useState<Array<{ id: string; name: string; thumbnail_image: string }>>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingGames, setLoadingGames] = useState(true);
+  const [loadingAudio, setLoadingAudio] = useState(true);
   const [selectedGameId, setSelectedGameId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
@@ -30,12 +32,21 @@ export default function HomePage({ startGame }: HomePageProps) {
         }
       } finally {
         if (isMounted) {
-          setLoading(false);
+          setLoadingGames(false);
         }
       }
     };
 
-    fetchGames();
+    const loadAll = async () => {
+      await Promise.all([
+        fetchGames(),
+        soundManager.preloadAll().finally(() => {
+          if (isMounted) setLoadingAudio(false);
+        }),
+      ]);
+    };
+
+    loadAll();
     
     return () => {
       isMounted = false;
@@ -43,6 +54,7 @@ export default function HomePage({ startGame }: HomePageProps) {
   }, []);
 
   const handleStartGame = () => {
+    soundManager.playClick();
     if (selectedGameId) {
       startGame(selectedGameId);
     } else {
@@ -68,8 +80,8 @@ export default function HomePage({ startGame }: HomePageProps) {
     >
       <h1 style={{ fontSize: 32, margin: 0 }}>Counting Dots Game</h1>
       
-      {loading ? (
-        <div>Loading games...</div>
+      {loadingGames || loadingAudio ? (
+        <div>Loading assets...</div>
       ) : games.length > 0 ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "center" }}>
           <div style={{ fontSize: 18, marginBottom: 8 }}>Pilih Game:</div>
@@ -99,21 +111,23 @@ export default function HomePage({ startGame }: HomePageProps) {
         </div>
       )}
 
-      <button
-        onClick={handleStartGame}
-        style={{
-          padding: "10px 24px",
-          borderRadius: 8,
-          border: "none",
-          background: "#22c55e",
-          color: "white",
-          cursor: "pointer",
-          fontSize: 16,
-          marginTop: 8,
-        }}
-      >
-        Start Game
-      </button>
+      {!loadingGames && !loadingAudio && (
+        <button
+          onClick={handleStartGame}
+          style={{
+            padding: "10px 24px",
+            borderRadius: 8,
+            border: "none",
+            background: "#22c55e",
+            color: "white",
+            cursor: "pointer",
+            fontSize: 16,
+            marginTop: 8,
+          }}
+        >
+          Start Game
+        </button>
+      )}
     </div>
   );
 }
